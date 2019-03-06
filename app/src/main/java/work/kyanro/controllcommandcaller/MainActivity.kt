@@ -1,22 +1,38 @@
 package work.kyanro.controllcommandcaller
 
 import android.hardware.Sensor
-import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.subjects.PublishSubject
+import java.util.concurrent.TimeUnit
 
-class MainActivity : AppCompatActivity(), SensorEventListener {
+open class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var sensorManager: SensorManager
+
+    private val compositeDisposable = CompositeDisposable()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
+
+        val disposable = radianSubject
+            .throttleFirst(500, TimeUnit.MILLISECONDS)
+            .subscribe {
+                Log.d("mylog", "X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+            }
+
+        compositeDisposable.add(disposable)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -42,57 +58,39 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager.unregisterListener(this)
     }
 
-    private fun radianToDegrees(angrad: Float): Int {
-        val degree = if (angrad >= 0) Math.toDegrees(angrad.toDouble()) else 360 + Math.toDegrees(angrad.toDouble())
-        return Math.floor(degree).toInt()
-    }
-
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
-    /** 地磁気行列  */
-    private var magneticValues: FloatArray? = null
-    /** 加速度行列  */
-    private var accelerometerValues: FloatArray? = null
+    private val radianSubject = PublishSubject.create<SensorEvent>()
 
-    /** X軸の回転角度  */
-    private var pitchX: Int = 0
-    /** Y軸の回転角度  */
-    private var rollY: Int = 0
-    /** Z軸の回転角度(方位角)  */
-    private var azimuthZ: Int = 0
+    private class SensorEvent(val degX: Int, val degY: Int, val degZ: Int)
 
-    val MATRIX_SIZE = 16
-    val DIMENSION = 3
 
-    override fun onSensorChanged(event: SensorEvent?) {
+    private val RAD2DEG = 180 / Math.PI
+    var rotationMatrix = FloatArray(9)
+    var gravity: FloatArray? = null
+    var geomagnetic: FloatArray? = null
+    var attitude = FloatArray(3)
+
+    override fun onSensorChanged(event: android.hardware.SensorEvent?) {
         event ?: return
+
         when (event.sensor.type) {
-            Sensor.TYPE_MAGNETIC_FIELD -> magneticValues = event.values.clone()
-            Sensor.TYPE_ACCELEROMETER -> accelerometerValues = event.values.clone()
+            Sensor.TYPE_MAGNETIC_FIELD -> geomagnetic = event.values.clone()
+            Sensor.TYPE_ACCELEROMETER -> gravity = event.values.clone()
             else -> return
         }
 
-        if (magneticValues != null && accelerometerValues != null) {
-            val rotationMatrix = FloatArray(MATRIX_SIZE)
-            val inclinationMatrix = FloatArray(MATRIX_SIZE)
-            val remapedMatrix = FloatArray(MATRIX_SIZE)
-            val orientationValues = FloatArray(DIMENSION)
-            // 加速度センサーと地磁気センサーから回転行列を取得
-            SensorManager.getRotationMatrix(rotationMatrix, inclinationMatrix, accelerometerValues, magneticValues)
-            SensorManager.remapCoordinateSystem(
-                rotationMatrix,
-                SensorManager.AXIS_X,
-                SensorManager.AXIS_Z,
-                remapedMatrix
+        if (geomagnetic != null && gravity != null) {
+            SensorManager.getRotationMatrix(rotationMatrix, null, gravity, geomagnetic)
+            SensorManager.getOrientation(rotationMatrix, attitude)
+
+            radianSubject.onNext(
+                SensorEvent(
+                    (attitude[0] * RAD2DEG).toInt(),
+                    (attitude[1] * RAD2DEG).toInt(),
+                    (attitude[2] * RAD2DEG).toInt()
+                )
             )
-            SensorManager.getOrientation(remapedMatrix, orientationValues)
-            // ラジアン値を変換し、それぞれの回転角度を取得する
-            azimuthZ = radianToDegrees(orientationValues[0])
-            pitchX = radianToDegrees(orientationValues[1])
-            rollY = radianToDegrees(orientationValues[2])
-            if (BuildConfig.DEBUG) {
-                Log.d("mylog", "X=" + pitchX + "Y=" + rollY + "Z=" + azimuthZ)
-            }
         }
     }
 }
