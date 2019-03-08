@@ -1,17 +1,24 @@
 package work.kyanro.controllcommandcaller.network
 
+import kotlinx.coroutines.Deferred
 import retrofit2.http.GET
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 enum class Button(val id: Int) {
-    A(8), B(9), Start(4), Select(5)
+    A(8), B(9), Start(4), Select(5);
+
+    override fun toString() = id.toString()
 }
 
 enum class Dpad(val id: Int) {
     // @formatter:off
     LeftUp  (7), Up  (8), RightUp  (9),
     Left    (4), None(5), Right    (6),
-    LeftDown(1), Down(2), RightDown(3)
+    LeftDown(1), Down(2), RightDown(3);
     // @formatter:on
+
+    override fun toString() = id.toString()
 }
 
 /**
@@ -29,14 +36,14 @@ enum class Dpad(val id: Int) {
  */
 interface CccApiService {
     @GET("/btn/hold/{id}")
-    fun hold(button: Button)
+    fun hold(@Path("id") button: Button): Deferred<Unit>
 
     @GET("/btn/release/{id}")
-    fun release(button: Button)
+    fun release(@Path("id") button: Button): Deferred<Unit>
 
     @GET("/dpad/hold/{id}")
-    fun hold(dpad: Dpad)
+    fun hold(@Path("id") dpad: Dpad): Deferred<Unit>
 
     @GET("/btn/release/{id}")
-    fun release(dpad: Dpad)
+    fun release(@Path("id") dpad: Dpad): Deferred<Unit>
 }

@@ -9,10 +9,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
+import kotlinx.coroutines.*
+import work.kyanro.controllcommandcaller.di.NetworkModule
+import work.kyanro.controllcommandcaller.network.Button
+import work.kyanro.controllcommandcaller.network.CccApiService
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.CoroutineContext
 
-open class MainActivity : AppCompatActivity(), SensorEventListener {
+open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
+    private val job = Job()
+
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
     private lateinit var sensorManager: SensorManager
 
     private val compositeDisposable = CompositeDisposable()
@@ -29,10 +38,27 @@ open class MainActivity : AppCompatActivity(), SensorEventListener {
             }
 
         compositeDisposable.add(disposable)
+
+        val api = getClient()
+
+        launch {
+            try {
+                withContext(Dispatchers.IO) { api.hold(Button.A).await() }
+            } catch (ignore: Exception) {
+            }
+        }
+    }
+
+    private fun getClient(): CccApiService {
+        return NetworkModule().let {
+            it.providesCccService(it.providesBaseUrl(), it.providesOkHttpClient())
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
+        compositeDisposable.clear()
+        job.cancel()
     }
 
     override fun onResume() {
