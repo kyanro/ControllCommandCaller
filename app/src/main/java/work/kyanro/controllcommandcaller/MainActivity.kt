@@ -9,10 +9,16 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import work.kyanro.controllcommandcaller.di.NetworkModule
 import work.kyanro.controllcommandcaller.network.Button
 import work.kyanro.controllcommandcaller.network.CccApiService
+import work.kyanro.controllcommandcaller.network.Dpad
+import work.kyanro.controllcommandcaller.repository.ButtonRepository
+import work.kyanro.controllcommandcaller.repository.DpadRepository
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 
@@ -41,9 +47,18 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
         val api = getClient()
 
+        val buttonRepository = ButtonRepository(api)
+        val dpadRepository = DpadRepository(api)
+
         launch {
             try {
-                withContext(Dispatchers.IO) { api.hold(Button.A).await() }
+                buttonRepository.hold(Button.A)
+            } catch (ignore: Exception) {
+            }
+        }
+        launch {
+            try {
+                dpadRepository.hold(Dpad.Down)
             } catch (ignore: Exception) {
             }
         }
