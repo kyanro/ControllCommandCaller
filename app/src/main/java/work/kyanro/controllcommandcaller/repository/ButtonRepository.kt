@@ -18,6 +18,11 @@ class ButtonRepository(private val apiClient: CccApiService) {
         waiting = false
     }
 
+    suspend fun push(button: Button) {
+        if (waiting) return
+        exec { apiClient.push(button) }
+    }
+
     suspend fun hold(button: Button) {
         if (waiting) return
         exec { apiClient.hold(button) }
@@ -29,7 +34,7 @@ class ButtonRepository(private val apiClient: CccApiService) {
     }
 }
 
-class DpadRepository(val apiClient: CccApiService) {
+class DpadRepository(private val apiClient: CccApiService) {
     var waiting = false
     var waitingDfd: Deferred<Unit>? = null
 
@@ -38,6 +43,11 @@ class DpadRepository(val apiClient: CccApiService) {
         waitingDfd = withContext(Dispatchers.IO) { block.invoke() }
         waitingDfd?.await()
         waiting = false
+    }
+
+    suspend fun push(button: Dpad) {
+        if (waiting) return
+        exec { apiClient.push(button) }
     }
 
     suspend fun hold(button: Dpad) {

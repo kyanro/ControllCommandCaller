@@ -32,6 +32,11 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
     private val compositeDisposable = CompositeDisposable()
 
+    class Deg3(var x: Int, var y: Int, var z: Int)
+
+    var baseDeg3: Deg3? = null
+
+    fun Int.toPositiveDeg() = this % 360 + 360
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -40,7 +45,15 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         val disposable = radianSubject
             .throttleFirst(500, TimeUnit.MILLISECONDS)
             .subscribe {
-                Log.d("mylog", "X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+                if (baseDeg3 == null) {
+                    baseDeg3 = Deg3(it.degX, it.degY, it.degZ)
+                }
+                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+                Log.d(
+                    "mylog",
+                    "posi: X=${it.degX.toPositiveDeg()}  Y=${it.degY.toPositiveDeg()}  Z=${it.degZ.toPositiveDeg()}"
+                )
+                Log.d("mylog", "base: X=${baseDeg3?.x}  Y=${baseDeg3?.y}  Z=${baseDeg3?.z}")
             }
 
         compositeDisposable.add(disposable)
@@ -58,7 +71,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         }
         launch {
             try {
-                dpadRepository.hold(Dpad.Down)
+                dpadRepository.push(Dpad.Left)
             } catch (ignore: Exception) {
             }
         }

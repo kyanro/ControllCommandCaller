@@ -8,7 +8,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import work.kyanro.controllcommandcaller.network.CccApiService
 
 class NetworkModule {
-    fun providesBaseUrl() = "http://192.168.0.1"
+    fun providesBaseUrl() = "http://10.0.229.203:1880"
 
     fun providesOkHttpClient(): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor()

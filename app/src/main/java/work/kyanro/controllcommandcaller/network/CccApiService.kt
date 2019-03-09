@@ -35,11 +35,17 @@ enum class Dpad(private val id: Int) {
  */
 @Suppress("DeferredIsResult")
 interface CccApiService {
+    @GET("/btn/push/{id}")
+    fun push(@Path("id") button: Button): Deferred<Unit>
+
     @GET("/btn/hold/{id}")
     fun hold(@Path("id") button: Button): Deferred<Unit>
 
     @GET("/btn/release/{id}")
     fun release(@Path("id") button: Button): Deferred<Unit>
+
+    @GET("/dpad/push/{id}")
+    fun push(@Path("id") dpad: Dpad): Deferred<Unit>
 
     @GET("/dpad/hold/{id}")
     fun hold(@Path("id") dpad: Dpad): Deferred<Unit>
