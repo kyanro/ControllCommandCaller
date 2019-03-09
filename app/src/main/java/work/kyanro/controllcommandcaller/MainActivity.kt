@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
+import androidx.databinding.DataBindingUtil
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
@@ -14,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import work.kyanro.controllcommandcaller.databinding.ActivityMainBinding
 import work.kyanro.controllcommandcaller.di.NetworkModule
 import work.kyanro.controllcommandcaller.network.Button
 import work.kyanro.controllcommandcaller.network.CccApiService
@@ -38,16 +40,32 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
     private val compositeDisposable = CompositeDisposable()
 
+    private lateinit var binding: ActivityMainBinding
     //    private fun Int.toPositiveDeg() = (this + 180) % 360
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
 
         val api = getClient()
         val buttonRepository = ButtonRepository(api)
         val dpadRepository = DpadRepository(api)
 
+        init(dpadRepository, buttonRepository)
+
+        binding.start.setOnClickListener { init(dpadRepository, buttonRepository) }
+        binding.stop.setOnClickListener {
+            launch {
+                releaseAllButton(dpadRepository, buttonRepository)
+                compositeDisposable.clear()
+            }
+        }
+    }
+
+    private fun init(
+        dpadRepository: DpadRepository,
+        buttonRepository: ButtonRepository
+    ) {
         launch {
             releaseAllButton(dpadRepository, buttonRepository)
             initController(dpadRepository, buttonRepository)
