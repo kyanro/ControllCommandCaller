@@ -25,7 +25,7 @@ import kotlin.coroutines.CoroutineContext
 
 open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
-    private val bomIntervalSec = 2L
+    private val bomIntervalSec = 3L
 
     private val yDegMargin = 5
     private val zDegMargin = 3
