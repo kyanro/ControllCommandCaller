@@ -41,16 +41,21 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
     private val compositeDisposable = CompositeDisposable()
 
     sealed class AutoFireManager(
+        val fireButton: Button,
         val fireIntervalSecDefault: Int,
         val fireIntervalSecMin: Int,
         val fireIntervalSecMax: Int,
         val fireIntervalStepSec: Int
     ) {
-        object BomberAutoFireManager : AutoFireManager(5, 3, 10, 1)
-        object SpaceAutoFireManager : AutoFireManager(6, 2, 8, 2)
+        object BomberAutoFireManager : AutoFireManager(Button.B, 5, 3, 10, 1)
+        object SpaceAutoFireManager : AutoFireManager(Button.X, 6, 2, 8, 2)
     }
 
-    class ManualFireManager(val job: Job, val buttonRepository: ButtonRepository) {
+    class ManualFireManager(
+        val job: Job,
+        val buttonRepository: ButtonRepository,
+        val autoFireManager: AutoFireManager
+    ) {
         /** Fireできる間隔 ms */
         private val bombIntervalMillis = 5000
 
@@ -70,7 +75,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             lastPutTimeMillis = now
 
             CoroutineScope(Dispatchers.IO + job).launch {
-                buttonRepository.push(Button.B)
+                buttonRepository.push(autoFireManager.fireButton)
             }
         }
     }
@@ -120,12 +125,12 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         binding.start.setOnClickListener { initButtonSettings(dpadRepository, buttonRepository, viewModel) }
         binding.stop.setOnClickListener {
             launch {
-                releaseAllButton(dpadRepository, buttonRepository)
+                releaseAllButton(dpadRepository, buttonRepository, autoFireManager)
                 compositeDisposable.clear()
             }
         }
 
-        val manualFireManager = ManualFireManager(job, buttonRepository).apply {
+        val manualFireManager = ManualFireManager(job, buttonRepository, autoFireManager).apply {
             noFireCallback = { restTimeMillis ->
                 val restTimeSec = String.format("%.1f", restTimeMillis / 1000f)
                 Snackbar.make(binding.root, "爆弾はあと ${restTimeSec}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
@@ -144,16 +149,19 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         viewModel: ViewModel
     ) {
         launch {
-            releaseAllButton(dpadRepository, buttonRepository)
+            releaseAllButton(dpadRepository, buttonRepository, viewModel.autoFireManager)
             initController(dpadRepository, buttonRepository, viewModel)
         }
     }
 
-    private suspend fun releaseAllButton(dpadRepository: DpadRepository, buttonRepository: ButtonRepository) {
+    private suspend fun releaseAllButton(
+        dpadRepository: DpadRepository,
+        buttonRepository: ButtonRepository,
+        autoFireManager: AutoFireManager
+    ) {
         dpadRepository.hold(Dpad.None)
         buttonRepository.run {
-            release(Button.B)
-            release(Button.A)
+            release(autoFireManager.fireButton)
         }
     }
 
@@ -183,7 +191,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         ).subscribe {
             try {
                 Log.d("mylog", "fire bomb ${viewModel.currentAutoFireIntervalTime.value?.toLong()}")
-                pushButton(buttonRepository, Button.B)
+                pushButton(buttonRepository, viewModel.autoFireManager.fireButton)
             } catch (ignore: Exception) {
             }
         }

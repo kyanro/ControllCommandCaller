@@ -5,7 +5,7 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 
 enum class Button(private val id: Int) {
-    A(8), B(9), Start(4), Select(5);
+    A(8), B(9), X(10), Y(11), Start(4), Select(5);
 
     override fun toString() = id.toString()
 }
