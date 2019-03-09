@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
+import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
 import kotlinx.coroutines.CoroutineScope
@@ -24,6 +25,11 @@ import kotlin.coroutines.CoroutineContext
 
 open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
+    private val bomIntervalSec = 2L
+
+    private val yDegMargin = 5
+    private val zDegMargin = 3
+
     private val job = Job()
 
     override val coroutineContext: CoroutineContext
@@ -32,46 +38,48 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
     private val compositeDisposable = CompositeDisposable()
 
-    class Deg3(var x: Int, var y: Int, var z: Int)
-
-    var baseDeg3: Deg3? = null
-
-    fun Int.toPositiveDeg() = this % 360 + 360
+    //    private fun Int.toPositiveDeg() = (this + 180) % 360
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
 
-        val disposable = radianSubject
-            .throttleFirst(500, TimeUnit.MILLISECONDS)
-            .subscribe {
-                if (baseDeg3 == null) {
-                    baseDeg3 = Deg3(it.degX, it.degY, it.degZ)
-                }
-                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
-                Log.d(
-                    "mylog",
-                    "posi: X=${it.degX.toPositiveDeg()}  Y=${it.degY.toPositiveDeg()}  Z=${it.degZ.toPositiveDeg()}"
-                )
-                Log.d("mylog", "base: X=${baseDeg3?.x}  Y=${baseDeg3?.y}  Z=${baseDeg3?.z}")
-            }
-
-        compositeDisposable.add(disposable)
-
         val api = getClient()
 
-        val buttonRepository = ButtonRepository(api)
         val dpadRepository = DpadRepository(api)
 
-        launch {
-            try {
-                buttonRepository.push(Button.B)
-            } catch (ignore: Exception) {
+        val disposable = radianSubject
+            .throttleFirst(500, TimeUnit.MILLISECONDS)
+            .filter { Math.abs(it.degY) > yDegMargin || Math.abs(it.degZ) > zDegMargin }
+            .subscribe {
+                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+                when {
+                    it.degY > yDegMargin -> move(dpadRepository, Dpad.Down)
+                    it.degY < -yDegMargin -> move(dpadRepository, Dpad.Up)
+                    it.degZ > zDegMargin -> move(dpadRepository, Dpad.Right)
+                    it.degZ < -zDegMargin -> move(dpadRepository, Dpad.Left)
+                }
             }
-        }
+        compositeDisposable.add(disposable)
+
+        val buttonRepository = ButtonRepository(api)
+        val disposable2 = Observable.interval(bomIntervalSec, TimeUnit.SECONDS)
+            .subscribe {
+                launch {
+                    try {
+                        buttonRepository.push(Button.B)
+                    } catch (ignore: Exception) {
+                    }
+                }
+            }
+        compositeDisposable.add(disposable2)
+    }
+
+    private fun move(dpadRepository: DpadRepository, dpad: Dpad) {
+        Log.d("mylog", "move to ${dpad.name}")
         launch {
             try {
-                dpadRepository.hold(Dpad.Left)
+                dpadRepository.hold(dpad)
             } catch (ignore: Exception) {
             }
         }
