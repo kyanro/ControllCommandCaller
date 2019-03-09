@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
 import androidx.databinding.DataBindingUtil
+import com.google.android.material.snackbar.Snackbar
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.subjects.PublishSubject
@@ -44,15 +45,20 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         private val bombIntervalMillis = 5000
 
         /** bombをおけるMAXの数 */
-        var stock = 5
+        var stock = Int.MAX_VALUE
         /** bombを置ける間隔 */
         var lastPutTimeMillis = System.currentTimeMillis()
+
+        var noPutCallback: ((Long) -> Unit)? = null
 
         fun put() {
             if (stock == 0) return
             val now = System.currentTimeMillis()
             val intervalMillis = now - lastPutTimeMillis
-            if (intervalMillis < bombIntervalMillis) return
+            if (intervalMillis < bombIntervalMillis) {
+                noPutCallback?.invoke((bombIntervalMillis - intervalMillis) / 1000L)
+                return
+            }
             lastPutTimeMillis = now
             stock -= 1
 
@@ -83,7 +89,11 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         }
 
-        val bombManager = BombManager(job, buttonRepository)
+        val bombManager = BombManager(job, buttonRepository).apply {
+            noPutCallback = { restTime ->
+                Snackbar.make(binding.root, "爆弾はあと ${restTime}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
+            }
+        }
         binding.bomb.setOnClickListener { bombManager.put() }
     }
 
