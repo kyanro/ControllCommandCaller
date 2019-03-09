@@ -28,7 +28,7 @@ import kotlin.coroutines.CoroutineContext
 
 open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
-    private val bomIntervalSec = 7L
+    private val bomIntervalSec = 5L
 
     private val yDegMargin = 10
     private val zDegMargin = 3
@@ -49,14 +49,15 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         /** bombを置ける間隔 */
         var lastPutTimeMillis = System.currentTimeMillis()
 
-        var noPutCallback: ((Long) -> Unit)? = null
+        var noPutCallback: ((remainTimeMillis: Long) -> Unit)? = null
 
         fun put() {
             if (stock == 0) return
             val now = System.currentTimeMillis()
             val intervalMillis = now - lastPutTimeMillis
             if (intervalMillis < bombIntervalMillis) {
-                noPutCallback?.invoke((bombIntervalMillis - intervalMillis) / 1000L)
+                val remainTimeMillis: Long = bombIntervalMillis - intervalMillis
+                noPutCallback?.invoke(remainTimeMillis)
                 return
             }
             lastPutTimeMillis = now
@@ -90,8 +91,9 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         }
 
         val bombManager = BombManager(job, buttonRepository).apply {
-            noPutCallback = { restTime ->
-                Snackbar.make(binding.root, "爆弾はあと ${restTime}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
+            noPutCallback = { restTimeMillis ->
+                val restTimeSec = String.format("%.1f", restTimeMillis / 1000f)
+                Snackbar.make(binding.root, "爆弾はあと ${restTimeSec}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
             }
         }
         binding.bomb.setOnClickListener { bombManager.put() }
