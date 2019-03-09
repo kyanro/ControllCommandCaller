@@ -27,10 +27,6 @@ import work.kyanro.controllcommandcaller.repository.DpadRepository
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 
-private val bombIntervalSecDefault = 5
-private val bombIntervalSecMin = 3
-private val bombIntervalSecMax = 10
-private val bombIntervalStepSec = 1
 private val yDegMargin = 10
 private val zDegMargin = 3
 
@@ -44,27 +40,34 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
     private val compositeDisposable = CompositeDisposable()
 
-    class BombManager(val job: Job, val buttonRepository: ButtonRepository) {
+    sealed class AutoFireManager(
+        val fireIntervalSecDefault: Int,
+        val fireIntervalSecMin: Int,
+        val fireIntervalSecMax: Int,
+        val fireIntervalStepSec: Int
+    ) {
+        object BomberAutoFireManager : AutoFireManager(5, 3, 10, 1)
+        object SpaceAutoFireManager : AutoFireManager(5, 3, 10, 1)
+    }
+
+    class ManualFireManager(val job: Job, val buttonRepository: ButtonRepository) {
+        /** Fireできる間隔 ms */
         private val bombIntervalMillis = 5000
 
-        /** bombをおけるMAXの数 */
-        var stock = Int.MAX_VALUE
-        /** bombを置ける間隔 */
+        /** 最後にFireした時間 */
         var lastPutTimeMillis = System.currentTimeMillis()
 
-        var noPutCallback: ((remainTimeMillis: Long) -> Unit)? = null
+        var noFireCallback: ((remainTimeMillis: Long) -> Unit)? = null
 
-        fun put() {
-            if (stock == 0) return
+        fun fire() {
             val now = System.currentTimeMillis()
             val intervalMillis = now - lastPutTimeMillis
             if (intervalMillis < bombIntervalMillis) {
                 val remainTimeMillis: Long = bombIntervalMillis - intervalMillis
-                noPutCallback?.invoke(remainTimeMillis)
+                noFireCallback?.invoke(remainTimeMillis)
                 return
             }
             lastPutTimeMillis = now
-            stock -= 1
 
             CoroutineScope(Dispatchers.IO + job).launch {
                 buttonRepository.push(Button.B)
@@ -72,22 +75,26 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         }
     }
 
-    class ViewModel {
-        var currentBombIntervalTime = MutableLiveData<Int>().apply { value = bombIntervalSecDefault }
+    class ViewModel(val autoFireManager: AutoFireManager) {
+        var currentAutoFireIntervalTime =
+            MutableLiveData<Int>().apply { value = autoFireManager.fireIntervalSecDefault }
 
-        fun incBombInterval() {
-            val current = currentBombIntervalTime.value ?: bombIntervalSecDefault
-            val next = current + bombIntervalStepSec
-            currentBombIntervalTime.value = next.coerceIn(bombIntervalSecMin, bombIntervalSecMax)
+        fun incAutoFireInterval() {
+            val current = currentAutoFireIntervalTime.value ?: autoFireManager.fireIntervalSecDefault
+            val next = current + autoFireManager.fireIntervalStepSec
+            currentAutoFireIntervalTime.value =
+                next.coerceIn(autoFireManager.fireIntervalSecMin, autoFireManager.fireIntervalSecMax)
         }
 
-        fun decBombInterval() {
-            val current = currentBombIntervalTime.value ?: bombIntervalSecDefault
-            val next = current - bombIntervalStepSec
-            currentBombIntervalTime.value = next.coerceIn(bombIntervalSecMin, bombIntervalSecMax)
+        fun decAutoFireInterval() {
+            val current = currentAutoFireIntervalTime.value ?: autoFireManager.fireIntervalSecDefault
+            val next = current - autoFireManager.fireIntervalStepSec
+            currentAutoFireIntervalTime.value =
+                next.coerceIn(autoFireManager.fireIntervalSecMin, autoFireManager.fireIntervalSecMax)
         }
     }
 
+    private lateinit var api: CccApiService
     private lateinit var binding: ActivityMainBinding
     //    private fun Int.toPositiveDeg() = (this + 180) % 360
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -95,15 +102,22 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
 
-        val viewModel = ViewModel()
+        api = getClient()
 
-        val api = getClient()
+        initGameSettings(AutoFireManager.BomberAutoFireManager)
+    }
+
+    private fun initGameSettings(autoFireManager: AutoFireManager) {
+        compositeDisposable.clear()
+
+        val viewModel = ViewModel(autoFireManager)
+
         val buttonRepository = ButtonRepository(api)
         val dpadRepository = DpadRepository(api)
 
-        init(dpadRepository, buttonRepository, viewModel)
+        initButtonSettings(dpadRepository, buttonRepository, viewModel)
 
-        binding.start.setOnClickListener { init(dpadRepository, buttonRepository, viewModel) }
+        binding.start.setOnClickListener { initButtonSettings(dpadRepository, buttonRepository, viewModel) }
         binding.stop.setOnClickListener {
             launch {
                 releaseAllButton(dpadRepository, buttonRepository)
@@ -111,18 +125,18 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         }
 
-        val bombManager = BombManager(job, buttonRepository).apply {
-            noPutCallback = { restTimeMillis ->
+        val manualFireManager = ManualFireManager(job, buttonRepository).apply {
+            noFireCallback = { restTimeMillis ->
                 val restTimeSec = String.format("%.1f", restTimeMillis / 1000f)
                 Snackbar.make(binding.root, "爆弾はあと ${restTimeSec}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
             }
         }
-        binding.bomb.setOnClickListener { bombManager.put() }
+        binding.bomb.setOnClickListener { manualFireManager.fire() }
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
     }
 
-    private fun init(
+    private fun initButtonSettings(
         dpadRepository: DpadRepository,
         buttonRepository: ButtonRepository,
         viewModel: ViewModel
@@ -150,7 +164,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             .throttleFirst(500, TimeUnit.MILLISECONDS)
             .filter { Math.abs(it.degY) > yDegMargin || Math.abs(it.degZ) > zDegMargin }
             .subscribe {
-                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+//                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
                 when {
                     it.degY > yDegMargin -> move(dpadRepository, Dpad.Down)
                     it.degY < -yDegMargin -> move(dpadRepository, Dpad.Up)
@@ -160,14 +174,13 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         compositeDisposable.add(disposable)
 
-        Log.d("mylog", "put bomb: initialize ${viewModel.currentBombIntervalTime.value?.toLong()}")
-
         val disposable2 = Observable.interval(
-            viewModel.currentBombIntervalTime.value?.toLong() ?: bombIntervalSecDefault.toLong(),
+            viewModel.currentAutoFireIntervalTime.value?.toLong()
+                ?: viewModel.autoFireManager.fireIntervalSecDefault.toLong(),
             TimeUnit.SECONDS
         ).subscribe {
             try {
-                Log.d("mylog", "put bomb ${viewModel.currentBombIntervalTime.value?.toLong()}")
+                Log.d("mylog", "fire bomb ${viewModel.currentAutoFireIntervalTime.value?.toLong()}")
                 pushButton(buttonRepository, Button.B)
             } catch (ignore: Exception) {
             }
