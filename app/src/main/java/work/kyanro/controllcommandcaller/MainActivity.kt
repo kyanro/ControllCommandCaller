@@ -176,8 +176,8 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             .subscribe {
                 //                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
                 when {
-                    it.degY > yDegMargin -> move(dpadRepository, Dpad.Down)
-                    it.degY < -yDegMargin -> move(dpadRepository, Dpad.Up)
+                    it.degY > yDegMargin -> move(dpadRepository, Dpad.Up)
+                    it.degY < -yDegMargin -> move(dpadRepository, Dpad.Down)
                     it.degZ > zDegMargin -> move(dpadRepository, Dpad.Right)
                     it.degZ < -zDegMargin -> move(dpadRepository, Dpad.Left)
                 }
