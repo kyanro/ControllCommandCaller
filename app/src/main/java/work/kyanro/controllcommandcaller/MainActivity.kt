@@ -25,9 +25,9 @@ import kotlin.coroutines.CoroutineContext
 
 open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
 
-    private val bomIntervalSec = 3L
+    private val bomIntervalSec = 7L
 
-    private val yDegMargin = 5
+    private val yDegMargin = 10
     private val zDegMargin = 3
 
     private val job = Job()
@@ -45,9 +45,24 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
 
         val api = getClient()
-
+        val buttonRepository = ButtonRepository(api)
         val dpadRepository = DpadRepository(api)
 
+        launch {
+            releaseAllButton(dpadRepository, buttonRepository)
+            initController(dpadRepository, buttonRepository)
+        }
+    }
+
+    private suspend fun releaseAllButton(dpadRepository: DpadRepository, buttonRepository: ButtonRepository) {
+        dpadRepository.hold(Dpad.None)
+        buttonRepository.run {
+            release(Button.B)
+            release(Button.A)
+        }
+    }
+
+    private suspend fun initController(dpadRepository: DpadRepository, buttonRepository: ButtonRepository) {
         val disposable = radianSubject
             .throttleFirst(500, TimeUnit.MILLISECONDS)
             .filter { Math.abs(it.degY) > yDegMargin || Math.abs(it.degZ) > zDegMargin }
@@ -62,17 +77,24 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         compositeDisposable.add(disposable)
 
-        val buttonRepository = ButtonRepository(api)
         val disposable2 = Observable.interval(bomIntervalSec, TimeUnit.SECONDS)
             .subscribe {
-                launch {
-                    try {
-                        buttonRepository.push(Button.B)
-                    } catch (ignore: Exception) {
-                    }
+                try {
+                    pushButton(buttonRepository, Button.B)
+                } catch (ignore: Exception) {
                 }
             }
         compositeDisposable.add(disposable2)
+    }
+
+    private fun pushButton(buttonRepository: ButtonRepository, button: Button) {
+        Log.d("mylog", "pushed: ${button.name}")
+        launch {
+            try {
+                buttonRepository.push(button)
+            } catch (ignore: Exception) {
+            }
+        }
     }
 
     private fun move(dpadRepository: DpadRepository, dpad: Dpad) {
