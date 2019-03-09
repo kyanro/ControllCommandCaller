@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.getSystemService
 import androidx.databinding.DataBindingUtil
+import androidx.lifecycle.MutableLiveData
 import com.google.android.material.snackbar.Snackbar
 import io.reactivex.Observable
 import io.reactivex.disposables.CompositeDisposable
@@ -26,12 +27,14 @@ import work.kyanro.controllcommandcaller.repository.DpadRepository
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 
+private val bombIntervalSecDefault = 5
+private val bombIntervalSecMin = 3
+private val bombIntervalSecMax = 10
+private val bombIntervalStepSec = 1
+private val yDegMargin = 10
+private val zDegMargin = 3
+
 open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineScope {
-
-    private val bomIntervalSec = 5L
-
-    private val yDegMargin = 10
-    private val zDegMargin = 3
 
     private val job = Job()
 
@@ -69,6 +72,22 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         }
     }
 
+    class ViewModel {
+        var currentBombIntervalTime = MutableLiveData<Int>().apply { value = bombIntervalSecDefault }
+
+        fun incBombInterval() {
+            val current = currentBombIntervalTime.value ?: bombIntervalSecDefault
+            val next = current + bombIntervalStepSec
+            currentBombIntervalTime.value = next.coerceIn(bombIntervalSecMin, bombIntervalSecMax)
+        }
+
+        fun decBombInterval() {
+            val current = currentBombIntervalTime.value ?: bombIntervalSecDefault
+            val next = current - bombIntervalStepSec
+            currentBombIntervalTime.value = next.coerceIn(bombIntervalSecMin, bombIntervalSecMax)
+        }
+    }
+
     private lateinit var binding: ActivityMainBinding
     //    private fun Int.toPositiveDeg() = (this + 180) % 360
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,13 +95,15 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         binding = DataBindingUtil.setContentView(this, R.layout.activity_main)
         sensorManager = getSystemService() ?: throw IllegalStateException("センサーが利用できる端末で利用してください")
 
+        val viewModel = ViewModel()
+
         val api = getClient()
         val buttonRepository = ButtonRepository(api)
         val dpadRepository = DpadRepository(api)
 
-        init(dpadRepository, buttonRepository)
+        init(dpadRepository, buttonRepository, viewModel)
 
-        binding.start.setOnClickListener { init(dpadRepository, buttonRepository) }
+        binding.start.setOnClickListener { init(dpadRepository, buttonRepository, viewModel) }
         binding.stop.setOnClickListener {
             launch {
                 releaseAllButton(dpadRepository, buttonRepository)
@@ -97,15 +118,18 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         }
         binding.bomb.setOnClickListener { bombManager.put() }
+        binding.lifecycleOwner = this
+        binding.viewModel = viewModel
     }
 
     private fun init(
         dpadRepository: DpadRepository,
-        buttonRepository: ButtonRepository
+        buttonRepository: ButtonRepository,
+        viewModel: ViewModel
     ) {
         launch {
             releaseAllButton(dpadRepository, buttonRepository)
-            initController(dpadRepository, buttonRepository)
+            initController(dpadRepository, buttonRepository, viewModel)
         }
     }
 
@@ -117,7 +141,11 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         }
     }
 
-    private suspend fun initController(dpadRepository: DpadRepository, buttonRepository: ButtonRepository) {
+    private fun initController(
+        dpadRepository: DpadRepository,
+        buttonRepository: ButtonRepository,
+        viewModel: ViewModel
+    ) {
         val disposable = radianSubject
             .throttleFirst(500, TimeUnit.MILLISECONDS)
             .filter { Math.abs(it.degY) > yDegMargin || Math.abs(it.degZ) > zDegMargin }
@@ -132,13 +160,18 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             }
         compositeDisposable.add(disposable)
 
-        val disposable2 = Observable.interval(bomIntervalSec, TimeUnit.SECONDS)
-            .subscribe {
-                try {
-                    pushButton(buttonRepository, Button.B)
-                } catch (ignore: Exception) {
-                }
+        Log.d("mylog", "put bomb: initialize ${viewModel.currentBombIntervalTime.value?.toLong()}")
+
+        val disposable2 = Observable.interval(
+            viewModel.currentBombIntervalTime.value?.toLong() ?: bombIntervalSecDefault.toLong(),
+            TimeUnit.SECONDS
+        ).subscribe {
+            try {
+                Log.d("mylog", "put bomb ${viewModel.currentBombIntervalTime.value?.toLong()}")
+                pushButton(buttonRepository, Button.B)
+            } catch (ignore: Exception) {
             }
+        }
         compositeDisposable.add(disposable2)
     }
 
