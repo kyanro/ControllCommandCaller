@@ -47,7 +47,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
         val fireIntervalStepSec: Int
     ) {
         object BomberAutoFireManager : AutoFireManager(5, 3, 10, 1)
-        object SpaceAutoFireManager : AutoFireManager(5, 3, 10, 1)
+        object SpaceAutoFireManager : AutoFireManager(6, 2, 8, 2)
     }
 
     class ManualFireManager(val job: Job, val buttonRepository: ButtonRepository) {
@@ -131,7 +131,9 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
                 Snackbar.make(binding.root, "爆弾はあと ${restTimeSec}秒でおけるようになるよ", Snackbar.LENGTH_LONG).show()
             }
         }
-        binding.bomb.setOnClickListener { manualFireManager.fire() }
+        binding.fire.setOnClickListener { manualFireManager.fire() }
+        binding.selectBomberMan.setOnClickListener { initGameSettings(AutoFireManager.BomberAutoFireManager) }
+        binding.selectSpaceReflection.setOnClickListener { initGameSettings(AutoFireManager.SpaceAutoFireManager) }
         binding.lifecycleOwner = this
         binding.viewModel = viewModel
     }
@@ -164,7 +166,7 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
             .throttleFirst(500, TimeUnit.MILLISECONDS)
             .filter { Math.abs(it.degY) > yDegMargin || Math.abs(it.degZ) > zDegMargin }
             .subscribe {
-//                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
+                //                Log.d("mylog", "curr: X=${it.degX}  Y=${it.degY}  Z=${it.degZ}")
                 when {
                     it.degY > yDegMargin -> move(dpadRepository, Dpad.Down)
                     it.degY < -yDegMargin -> move(dpadRepository, Dpad.Up)
