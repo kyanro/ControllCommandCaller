@@ -65,13 +65,13 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
         launch {
             try {
-                buttonRepository.hold(Button.A)
+                buttonRepository.push(Button.B)
             } catch (ignore: Exception) {
             }
         }
         launch {
             try {
-                dpadRepository.push(Dpad.Left)
+                dpadRepository.hold(Dpad.Left)
             } catch (ignore: Exception) {
             }
         }

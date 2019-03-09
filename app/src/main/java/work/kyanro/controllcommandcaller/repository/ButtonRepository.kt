@@ -54,9 +54,4 @@ class DpadRepository(private val apiClient: CccApiService) {
         if (waiting) return
         exec { apiClient.hold(button) }
     }
-
-    suspend fun release(button: Button) {
-        if (waiting) return
-        exec { apiClient.release(button) }
-    }
 }

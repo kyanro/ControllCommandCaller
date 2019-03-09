@@ -49,7 +49,4 @@ interface CccApiService {
 
     @GET("/dpad/hold/{id}")
     fun hold(@Path("id") dpad: Dpad): Deferred<Unit>
-
-    @GET("/btn/release/{id}")
-    fun release(@Path("id") dpad: Dpad): Deferred<Unit>
 }
