@@ -40,6 +40,28 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
 
     private val compositeDisposable = CompositeDisposable()
 
+    class BombManager(val job: Job, val buttonRepository: ButtonRepository) {
+        private val bombIntervalMillis = 5000
+
+        /** bombをおけるMAXの数 */
+        var stock = 5
+        /** bombを置ける間隔 */
+        var lastPutTimeMillis = System.currentTimeMillis()
+
+        fun put() {
+            if (stock == 0) return
+            val now = System.currentTimeMillis()
+            val intervalMillis = now - lastPutTimeMillis
+            if (intervalMillis < bombIntervalMillis) return
+            lastPutTimeMillis = now
+            stock -= 1
+
+            CoroutineScope(Dispatchers.IO + job).launch {
+                buttonRepository.push(Button.B)
+            }
+        }
+    }
+
     private lateinit var binding: ActivityMainBinding
     //    private fun Int.toPositiveDeg() = (this + 180) % 360
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,6 +82,9 @@ open class MainActivity : AppCompatActivity(), SensorEventListener, CoroutineSco
                 compositeDisposable.clear()
             }
         }
+
+        val bombManager = BombManager(job, buttonRepository)
+        binding.bomb.setOnClickListener { bombManager.put() }
     }
 
     private fun init(
